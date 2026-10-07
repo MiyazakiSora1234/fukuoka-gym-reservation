@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import json from '../config.json' with { type: 'json' };
 
 export interface Want {
@@ -11,7 +10,10 @@ export interface Want {
 }
 
 export interface Config {
+  /** LINE の「条件」で選べる施設。予約システムの施設選択画面の名前そのまま。順番を変えると古いボタンが別の施設を指すので、足すときは末尾に */
   facilities: string[];
+  /** 最初に選ばれている施設 */
+  defaultFacilities: string[];
   /** 種目。時間帯別空き状況で、行の名前にこの文字列を含む枠を探す（例: バドミントン、卓球） */
   sport: string;
   /** 施設別空き状況で見る行（バドミントンは「競技場」、卓球は「小体育室」など） */
@@ -38,12 +40,6 @@ export interface Config {
 
 // Lambda にも同梱されるよう import で読む
 export const config: Config = json as Config;
-
-export const env = {
-  lineToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
-  lineSecret: process.env.LINE_CHANNEL_SECRET ?? '',
-  lineUserId: process.env.LINE_USER_ID ?? '',
-};
 
 const WEEKDAYS = '日月火水木金土';
 

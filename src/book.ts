@@ -10,14 +10,14 @@ import { mkdirSync } from 'node:fs';
 import { config } from './config.ts';
 import { launchBrowser, onLambda } from './browser.ts';
 import { loadJSON, saveJSON } from './store.ts';
-import { loadCredentials } from './credentials.ts';
-import { openDays, showWeek, readDays, openTimes, readTimes, next, settle, type Slot } from './site.ts';
+import { loadCredentials } from './secrets.ts';
+import { BASE, openDays, showWeek, readDays, openTimes, readTimes, next, settle, type Slot } from './site.ts';
 
 export const AUTH_KEY = 'auth.json';
 
 export class LoginRequired extends Error {
-  constructor(reason = '予約システムのログインが切れています') {
-    super(`${reason}。npm run set-credentials で利用者IDとパスワードを登録するか、PC で npm run login をしてください`);
+  constructor(reason = '予約システムにログインできません') {
+    super(`${reason}。LINE の「設定」→「ログイン情報」で利用者IDとパスワードを確かめてください`);
   }
 }
 
@@ -54,7 +54,7 @@ async function onInputPage(page: Page) {
 /** ログイン画面で利用者ID・パスワードを入れてログインする */
 async function login(page: Page) {
   const creds = await loadCredentials();
-  if (!creds) throw new LoginRequired();
+  if (!creds) throw new LoginRequired('ログイン情報（利用者ID・パスワード）が未登録です');
   await page.locator('#UserLoginInputModel_Id').fill(creds.userId);
   await page.locator('input[name="UserLoginInputModel.Password"]').fill(creds.password);
   await page.locator('button[aria-label="ログイン"].btn-lg').click();
@@ -118,6 +118,27 @@ export async function bookSlot(slot: Slot, dryRun: boolean, people: number): Pro
   } finally {
     // ログイン状態が延長されていれば保存し直す
     if (!/\/Login/i.test(page.url())) await saveJSON(AUTH_KEY, await context.storageState()).catch(() => {});
+    await browser.close();
+  }
+}
+
+/** 登録したログイン情報でログインできるか確かめる（LINE で登録した直後に使う）。できればクッキーも保存する */
+export async function verifyLogin(): Promise<void> {
+  const browser = await launchBrowser();
+  const context = await browser.newContext({ viewport: { width: 1200, height: 900 } });
+  const page = await context.newPage();
+  try {
+    await page.goto(`${BASE}/Home`);
+    await settle(page);
+    await page.getByRole('button', { name: 'ログイン' }).first().click();
+    await page.waitForURL(/\/Login/i, { timeout: 30_000 });
+    await settle(page);
+    await login(page);
+    await saveJSON(AUTH_KEY, await context.storageState());
+  } catch (e) {
+    await shot(page, 'login-error').catch(() => {});
+    throw e;
+  } finally {
     await browser.close();
   }
 }

@@ -1,12 +1,13 @@
-// LINE のトーク画面の下に出るメニュー（リッチメニュー）を作り直す: npm run richmenu
-// 画像はブラウザで HTML を描いて作り、ボタンは src/line.ts の MENU と同じテキストを送る
-import 'dotenv/config';
-import { chromium } from 'playwright';
+// LINE のトーク画面の下に出るメニュー（リッチメニュー）を作り直す
+//   npm run richmenu           … assets/richmenu.png で登録する（GitHub Actions から実行される）
+//   npm run richmenu -- --render … 画像を描き直して assets/richmenu.png に保存する（開発時。Playwright が必要）
+// ボタンは src/line.ts の MENU と同じテキストを送る。LINE のトークンは SSM から読む
+import { readFileSync, writeFileSync } from 'node:fs';
 import { MENU } from '../src/line.ts';
 import { config } from '../src/config.ts';
+import { lineSecrets } from '../src/secrets.ts';
 
-const token = process.env.LINE_CHANNEL_ACCESS_TOKEN;
-if (!token) throw new Error('.env の LINE_CHANNEL_ACCESS_TOKEN が必要です');
+const IMAGE = 'assets/richmenu.png';
 const NAME = 'fukuoka-gym-reservation';
 const W = 2500;
 const H = 843;
@@ -23,6 +24,8 @@ const ICONS: Record<(typeof MENU)[number], [string, string]> = {
 };
 
 async function api(path: string, init: RequestInit = {}, host = 'api.line.me') {
+  const { token } = await lineSecrets();
+  if (!token) throw new Error('LINE のチャネルアクセストークンが SSM に登録されていません');
   const res = await fetch(`https://${host}/v2/bot/${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...(init.headers ?? {}) },
@@ -45,6 +48,7 @@ async function renderImage(): Promise<Buffer> {
     .label { font-size: 92px; font-weight: 700; color: #1d2b22; }
     .sub { font-size: 50px; color: #6b7a71; }
   </style><div class="grid">${cells}</div>`;
+  const { chromium } = await import('playwright');
   const browser = await chromium.launch();
   const page = await browser.newPage({ viewport: { width: W, height: H } });
   await page.setContent(html);
@@ -53,11 +57,9 @@ async function renderImage(): Promise<Buffer> {
   return png;
 }
 
-// --preview なら画像だけ作って終わる
-if (process.argv.includes('--preview')) {
-  const { writeFileSync } = await import('node:fs');
-  writeFileSync('richmenu-preview.png', await renderImage());
-  console.log('richmenu-preview.png に保存しました');
+if (process.argv.includes('--render')) {
+  writeFileSync(IMAGE, await renderImage());
+  console.log(`${IMAGE} に保存しました`);
   process.exit(0);
 }
 
@@ -83,7 +85,7 @@ const { richMenuId } = await api('richmenu', {
     })),
   }),
 });
-const png = await renderImage();
+const png = readFileSync(IMAGE);
 await api(`richmenu/${richMenuId}/content`, { method: 'POST', headers: { 'Content-Type': 'image/png' }, body: new Uint8Array(png) }, 'api-data.line.me');
 await api(`user/all/richmenu/${richMenuId}`, { method: 'POST' });
 console.log(`リッチメニューを設定しました（${richMenuId}）`);

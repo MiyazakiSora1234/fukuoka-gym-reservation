@@ -1,11 +1,12 @@
-// AWS の構成（CDK）。npm run deploy で作成・更新する
-//   S3      … state.json / auth.json（ログインのクッキー）/ health.json
+// AWS の構成（CDK）。GitHub の main に push すると GitHub Actions がデプロイする
+//   S3      … state.json / auth.json（ログインのクッキー）/ health.json / credentials-link.json
+//   SSM     … LINE のトークン・シークレット、予約システムの利用者ID・パスワード（SecureString。値はスタックの外で登録）
 //   worker  … 空き確認と予約（ヘッドレス Chromium）。EventBridge で定期実行
-//   webhook … LINE の Webhook を受ける関数URL
+//   webhook … 関数URL。LINE の Webhook と、ログイン情報の入力ページ
+//   GitHub  … GitHub Actions が鍵なし（OIDC）でデプロイするためのロール
 // 常時起動のサーバーを置かず、Lambda の無料枠に収まる構成にしている
-import 'dotenv/config';
 import { App, Stack, Duration, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
-import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
+import { PolicyStatement, Role, OpenIdConnectProvider, WebIdentityPrincipal } from 'aws-cdk-lib/aws-iam';
 import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Runtime, Architecture, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -13,6 +14,8 @@ import { Rule, Schedule } from 'aws-cdk-lib/aws-events';
 import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import config from '../config.json' with { type: 'json' };
+
+const GITHUB_REPO = 'MiyazakiSora1234/fukuoka-gym-reservation';
 
 const app = new App();
 const stack = new Stack(app, 'FukuokaGymReservation', { env: { region: 'ap-northeast-1' } });
@@ -24,19 +27,17 @@ const bucket = new Bucket(stack, 'State', {
   removalPolicy: RemovalPolicy.RETAIN,
 });
 
-// .env の書き間違いで LINE の署名検証が全部失敗しないよう、形式を確かめてからデプロイする
-const secret = process.env.LINE_CHANNEL_SECRET ?? '';
-if (!/^[0-9a-f]{32}$/.test(secret)) {
-  throw new Error(`.env の LINE_CHANNEL_SECRET が32桁の16進数ではありません（${secret.length}文字）`);
-}
+const paramArn = (name: string) =>
+  stack.formatArn({ service: 'ssm', resource: 'parameter', resourceName: `fukuoka-gym-reservation/${name}` });
+// SecureString は AWS 管理キー（aws/ssm）で暗号化される。SSM 経由の場合だけ使えるようにする
+const kmsViaSsm = (actions: string[]) =>
+  new PolicyStatement({
+    actions,
+    resources: ['*'],
+    conditions: { StringEquals: { 'kms:ViaService': `ssm.${stack.region}.amazonaws.com` } },
+  });
 
-const environment = {
-  STATE_BUCKET: bucket.bucketName,
-  LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
-  LINE_CHANNEL_SECRET: process.env.LINE_CHANNEL_SECRET ?? '',
-  LINE_USER_ID: process.env.LINE_USER_ID ?? '',
-  TZ: 'Asia/Tokyo',
-};
+const environment = { STATE_BUCKET: bucket.bucketName, TZ: 'Asia/Tokyo' };
 
 const common = {
   entry: 'src/lambda.ts',
@@ -47,7 +48,7 @@ const common = {
     target: 'node22',
     // ESM の出力で require を使う依存があるため
     banner: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
-    // ブラウザ本体はバンドルせず node_modules ごと入れる。PC 用の playwright は使わない
+    // ブラウザ本体はバンドルせず node_modules ごと入れる。開発用の playwright は使わない
     nodeModules: ['@sparticuz/chromium', 'playwright-core'],
     externalModules: ['playwright', '@aws-sdk/*'],
   },
@@ -64,20 +65,8 @@ const worker = new NodejsFunction(stack, 'Worker', {
   retryAttempts: 0,
 });
 bucket.grantReadWrite(worker);
-// 予約システムの利用者ID・パスワード（npm run set-credentials で登録する SecureString）を読む
-worker.addToRolePolicy(
-  new PolicyStatement({
-    actions: ['ssm:GetParameters'],
-    resources: [stack.formatArn({ service: 'ssm', resource: 'parameter', resourceName: 'fukuoka-gym-reservation/*' })],
-  }),
-);
-worker.addToRolePolicy(
-  new PolicyStatement({
-    actions: ['kms:Decrypt'],
-    resources: ['*'],
-    conditions: { StringEquals: { 'kms:ViaService': `ssm.${stack.region}.amazonaws.com` } },
-  }),
-);
+worker.addToRolePolicy(new PolicyStatement({ actions: ['ssm:GetParameters'], resources: [paramArn('*')] }));
+worker.addToRolePolicy(kmsViaSsm(['kms:Decrypt']));
 
 const webhook = new NodejsFunction(stack, 'Webhook', {
   ...common,
@@ -89,6 +78,17 @@ const webhook = new NodejsFunction(stack, 'Webhook', {
 });
 bucket.grantReadWrite(webhook);
 worker.grantInvoke(webhook);
+// LINE のトークン・シークレットを読み、入力ページから利用者ID・パスワードを書き込む
+webhook.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['ssm:GetParameters'],
+    resources: [paramArn('line-channel-access-token'), paramArn('line-channel-secret')],
+  }),
+);
+webhook.addToRolePolicy(
+  new PolicyStatement({ actions: ['ssm:PutParameter'], resources: [paramArn('user-id'), paramArn('password')] }),
+);
+webhook.addToRolePolicy(kmsViaSsm(['kms:Decrypt', 'kms:Encrypt', 'kms:GenerateDataKey']));
 const url = webhook.addFunctionUrl({ authType: FunctionUrlAuthType.NONE });
 
 // 確認しない時間帯（quietHours, JST）を除いて intervalMinutes ごとに実行する。cron は UTC
@@ -102,5 +102,31 @@ new Rule(stack, 'Schedule', {
   targets: [new LambdaFunction(worker, { retryAttempts: 0 })],
 });
 
+// GitHub Actions（このリポジトリの main だけ）が鍵なしでデプロイできるようにする。
+// 権限は CDK の bootstrap ロールを引き受けることと、リッチメニュー用に LINE のトークンを読むことだけ
+const github = new OpenIdConnectProvider(stack, 'GitHubOidc', {
+  url: 'https://token.actions.githubusercontent.com',
+  clientIds: ['sts.amazonaws.com'],
+});
+const deployRole = new Role(stack, 'GitHubDeployRole', {
+  roleName: 'fukuoka-gym-reservation-github-deploy',
+  assumedBy: new WebIdentityPrincipal(github.openIdConnectProviderArn, {
+    StringEquals: {
+      'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
+      'token.actions.githubusercontent.com:sub': `repo:${GITHUB_REPO}:ref:refs/heads/main`,
+    },
+  }),
+  maxSessionDuration: Duration.hours(1),
+});
+deployRole.addToPolicy(
+  new PolicyStatement({
+    actions: ['sts:AssumeRole'],
+    resources: [`arn:aws:iam::${stack.account}:role/cdk-hnb659fds-*-${stack.account}-${stack.region}`],
+  }),
+);
+deployRole.addToPolicy(new PolicyStatement({ actions: ['ssm:GetParameters'], resources: [paramArn('line-channel-access-token')] }));
+deployRole.addToPolicy(kmsViaSsm(['kms:Decrypt']));
+
 new CfnOutput(stack, 'WebhookUrl', { value: url.url });
 new CfnOutput(stack, 'StateBucket', { value: bucket.bucketName });
+new CfnOutput(stack, 'GitHubDeployRoleArn', { value: deployRole.roleArn });

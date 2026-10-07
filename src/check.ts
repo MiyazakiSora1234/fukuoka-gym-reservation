@@ -15,11 +15,11 @@ function addDays(date: string, n: number) {
 }
 
 /** wants に合う曜日の日だけ時間帯別空き状況を開く（時間帯の絞り込みは呼び出し側） */
-export async function findVacant(browser: Browser, wants: Want[]): Promise<Slot[]> {
+export async function findVacant(browser: Browser, wants: Want[], facilities: string[]): Promise<Slot[]> {
   const page = await browser.newPage();
   const found: Slot[] = [];
   try {
-    await openDays(page, config.facilities);
+    await openDays(page, facilities);
     const today = jstToday();
     for (let w = 0; w < config.weeksAhead; w++) {
       await showWeek(page, addDays(today, w * 7));

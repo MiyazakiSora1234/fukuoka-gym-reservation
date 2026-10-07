@@ -1,9 +1,9 @@
 // LINE Messaging API とメッセージの見た目
 // （LINE Notify は 2025年3月で終了したため Messaging API を使う）
-// LINE_USER_ID があればその人にプッシュ、なければ公式アカウントの友だち全員にブロードキャストする。
-// 自分専用の公式アカウントなら、どちらでも届くのは自分だけ
+// 通知は公式アカウントの友だち全員へのブロードキャスト。自分専用の公式アカウントなので届くのは自分だけ
 import { createHmac, timingSafeEqual } from 'node:crypto';
-import { config, env, weekdayOf } from './config.ts';
+import { config, weekdayOf } from './config.ts';
+import { lineSecrets } from './secrets.ts';
 import { BASE, type Slot } from './site.ts';
 
 export type Message = Record<string, unknown>;
@@ -12,21 +12,21 @@ const GREEN = '#06C755';
 const GRAY = '#888888';
 
 async function call(path: string, body: unknown) {
+  const { token } = await lineSecrets();
+  if (!token) {
+    console.warn('LINE のチャネルアクセストークンが未登録なので送りません');
+    return;
+  }
   const res = await fetch(`https://api.line.me/v2/bot/message/${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${env.lineToken}` },
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(body),
   });
   if (!res.ok) console.error(`LINE 送信失敗: ${res.status} ${await res.text()}`);
 }
 
 export async function send(messages: Message[]) {
-  if (!env.lineToken) {
-    console.warn('LINE_CHANNEL_ACCESS_TOKEN が未設定なので LINE には送りません');
-    return;
-  }
-  if (env.lineUserId) await call('push', { to: env.lineUserId, messages });
-  else await call('broadcast', { messages });
+  await call('broadcast', { messages });
 }
 
 /** Webhook の返信。プッシュと違って無料プランの通数に数えられない */
@@ -50,6 +50,8 @@ export function textMessage(text: string): Message {
   return { type: 'text', text: text.slice(0, 5000), quickReply };
 }
 
+export const shortName = (facility: string) => facility.replace('（個人利用）', '').replace(/体育館$/, '');
+
 export function formatSlot(s: Slot) {
   return `${s.date.slice(5).replace('-', '/')}(${weekdayOf(s.date)}) ${s.from}-${s.to} ${s.facility.replace('（個人利用）', '')}`;
 }
@@ -61,7 +63,9 @@ export type Postback =
   | { kind: 'cancel' }
   | { kind: 'preset'; id: string }
   | { kind: 'people'; n: number }
-  | { kind: 'toggle'; key: 'paused' | 'auto' | 'dryRun' };
+  | { kind: 'toggle'; key: 'paused' | 'auto' | 'dryRun' }
+  | { kind: 'facility'; facility: string }
+  | { kind: 'creds' };
 
 function slotData(kind: 'ask' | 'book', s: Slot) {
   return `${kind}|${config.facilities.indexOf(s.facility)}|${s.date}|${s.from}|${s.to}`;
@@ -84,6 +88,12 @@ export function parsePostback(data: string): Postback | undefined {
       return { kind, n: Number(a[0]) };
     case 'toggle':
       return ['paused', 'auto', 'dryRun'].includes(a[0]) ? { kind, key: a[0] as 'paused' } : undefined;
+    case 'facility': {
+      const facility = config.facilities[Number(a[0])];
+      return facility ? { kind, facility } : undefined;
+    }
+    case 'creds':
+      return { kind };
   }
   return undefined;
 }
@@ -156,6 +166,7 @@ export interface SettingsView {
   autoEnabled: boolean;
   dryRun: boolean;
   loginProblem: boolean;
+  credentialsSet: boolean;
 }
 
 /** 設定。各行のボタンで切り替える */
@@ -177,19 +188,27 @@ export function settingsMessage(v: SettingsView): Message {
       row('空き確認', v.paused ? '⏸ 停止中' : '▶️ 動作中', v.paused ? '再開する' : '止める', 'toggle|paused'),
       row('自動予約', v.autoEnabled ? '🤖 オン' : 'オフ', v.autoEnabled ? 'オフにする' : 'オンにする', 'toggle|auto'),
       row('予約モード', v.dryRun ? '🧪 お試し' : '✅ 本番', v.dryRun ? '本番にする' : 'お試しにする', 'toggle|dryRun'),
+      row('ログイン情報', v.credentialsSet ? '🔑 登録済み' : '未登録', v.credentialsSet ? '変更する' : '登録する', 'creds'),
       text(
         v.dryRun
           ? 'お試しモードでは申込の直前まで進めて止めます。うまく動くのを確かめたら本番にしてください'
           : '本番モードでは実際に予約します',
         { size: 'xs', color: GRAY },
       ),
-      ...(v.loginProblem ? [text('🔑 予約システムにログインできていません。PC で npm run set-credentials をしてください', { size: 'xs', color: '#D93025' })] : []),
+      ...(v.loginProblem
+        ? [text('🔑 予約システムにログインできていません。「ログイン情報」を確かめてください', { size: 'xs', color: '#D93025' })]
+        : []),
     ]),
   );
 }
 
 /** 条件（いつの枠を探すか・人数） */
-export function conditionsMessage(presets: { id: string; label: string }[], current: string, people: number): Message {
+export function conditionsMessage(
+  presets: { id: string; label: string }[],
+  current: string,
+  people: number,
+  facilities: string[],
+): Message {
   const choice = (label: string, selected: boolean, data: string) => ({
     ...button(selected ? `✓ ${label}` : label, postback(data, label), selected),
     flex: 1,
@@ -208,8 +227,26 @@ export function conditionsMessage(presets: { id: string; label: string }[], curr
       ...grid(presets, 2, (p) => choice(p.label, p.id === current, `preset|${p.id}`)),
       text('人数', { size: 'sm', color: GRAY }),
       ...grid([2, 3, 4, 5, 6], 5, (n) => choice(`${n}`, n === people, `people|${n}`)),
-      text(`施設: ${config.facilities.map((f) => f.replace('（個人利用）', '')).join('・')}`, { size: 'xs', color: GRAY }),
+      text('体育館（複数選べます）', { size: 'sm', color: GRAY }),
+      ...grid(config.facilities, 3, (f) =>
+        choice(shortName(f), facilities.includes(f), `facility|${config.facilities.indexOf(f)}`),
+      ),
     ]),
+  );
+}
+
+/** ログイン情報の入力ページへのリンク（数分で無効になる1回限りのもの） */
+export function credentialsLinkMessage(url: string, minutes: number): Message {
+  return flex(
+    'ログイン情報の登録',
+    bubble(
+      '🔑 ログイン情報の登録',
+      [
+        text('予約システムの利用者IDとパスワードを入力するページを開きます。', { size: 'sm' }),
+        text(`このリンクは${minutes}分間・1回だけ使えます。パスワードは LINE のトークには残らず、AWS に暗号化して保存します。`, { size: 'xs', color: GRAY }),
+      ],
+      [button('入力ページを開く', { type: 'uri', uri: url })],
+    ),
   );
 }
 
@@ -235,15 +272,17 @@ ${config.sport}の空きを10分ごとに確認して、新しい空きが出た
 ・空き状況 … いま空いている枠と状態
 ・今すぐ確認 … その場で空きを調べ直す
 ・予約一覧 … このシステムで取った予約
-・条件 … 探す曜日・時間帯と人数
-・設定 … 止める／自動予約／お試し・本番
+・条件 … 探す曜日・時間帯、人数、体育館
+・設定 … 止める／自動予約／お試し・本番／ログイン情報
 ・ヘルプ … この説明
 
-空き通知の「予約する」を押すと、確認のあとに予約します。`;
+空き通知の「予約する」を押すと、確認のあとに予約します。
+予約するには、最初に「設定」の「ログイン情報」で予約システムの利用者IDとパスワードを登録してください。`;
 
-export function verifySignature(rawBody: string, signature: string | undefined) {
-  if (!env.lineSecret || !signature) return false;
-  const expected = createHmac('sha256', env.lineSecret).update(rawBody).digest();
+export async function verifySignature(rawBody: string, signature: string | undefined) {
+  const { secret } = await lineSecrets();
+  if (!secret || !signature) return false;
+  const expected = createHmac('sha256', secret).update(rawBody).digest();
   const given = Buffer.from(signature, 'base64');
   return given.length === expected.length && timingSafeEqual(given, expected);
 }

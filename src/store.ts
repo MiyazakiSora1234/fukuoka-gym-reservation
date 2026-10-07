@@ -1,5 +1,4 @@
 // 状態とログイン情報の保存先。STATE_BUCKET があれば S3、なければ .data/ のファイル
-import 'dotenv/config';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { S3Client, GetObjectCommand, PutObjectCommand, NoSuchKey } from '@aws-sdk/client-s3';
 import type { Slot } from './site.ts';
@@ -51,6 +50,10 @@ export interface State {
   preset?: string;
   /** LINE の「条件」で選んだ人数。なければ config.json の autoBook.people */
   people?: number;
+  /** LINE の「条件」で選んだ施設。なければ config.json の defaultFacilities */
+  facilities?: string[];
+  /** 予約システムの利用者ID・パスワードを登録済みか（値は SSM。ここには持たない） */
+  credentialsSet?: boolean;
 }
 
 export const emptyState: State = {
