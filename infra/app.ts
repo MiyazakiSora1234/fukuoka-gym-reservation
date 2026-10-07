@@ -15,7 +15,9 @@ import { LambdaFunction } from 'aws-cdk-lib/aws-events-targets';
 import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import config from '../config.json' with { type: 'json' };
 
-const GITHUB_REPO = 'MiyazakiSora1234/fukuoka-gym-reservation';
+// GitHub の OIDC トークンの sub は、所有者とリポジトリの変わらない数字の ID を含む形式
+// （repo:所有者@ID/リポジトリ@ID:ref:...）。ID まで固定するので、同名のリポジトリを作り直されてもなりすませない
+const GITHUB_SUB = 'repo:MiyazakiSora1234@311931365/fukuoka-gym-reservation@1408856541:ref:refs/heads/main';
 
 const app = new App();
 const stack = new Stack(app, 'FukuokaGymReservation', { env: { region: 'ap-northeast-1' } });
@@ -113,7 +115,7 @@ const deployRole = new Role(stack, 'GitHubDeployRole', {
   assumedBy: new WebIdentityPrincipal(github.openIdConnectProviderArn, {
     StringEquals: {
       'token.actions.githubusercontent.com:aud': 'sts.amazonaws.com',
-      'token.actions.githubusercontent.com:sub': `repo:${GITHUB_REPO}:ref:refs/heads/main`,
+      'token.actions.githubusercontent.com:sub': GITHUB_SUB,
     },
   }),
   maxSessionDuration: Duration.hours(1),
