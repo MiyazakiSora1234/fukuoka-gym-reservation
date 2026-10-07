@@ -14,7 +14,7 @@ import { LogGroup, RetentionDays } from 'aws-cdk-lib/aws-logs';
 import config from '../config.json' with { type: 'json' };
 
 const app = new App();
-const stack = new Stack(app, 'BadmintonYoyaku', { env: { region: 'ap-northeast-1' } });
+const stack = new Stack(app, 'FukuokaGymReservation', { env: { region: 'ap-northeast-1' } });
 
 const bucket = new Bucket(stack, 'State', {
   blockPublicAccess: BlockPublicAccess.BLOCK_ALL,

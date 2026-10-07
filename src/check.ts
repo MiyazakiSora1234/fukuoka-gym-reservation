@@ -1,4 +1,4 @@
-// 指定した施設・期間の空き枠（バドミントン）を集める
+// 指定した施設・期間で、目的の種目の空き枠を集める
 import type { Browser } from 'playwright-core';
 import { config, matchesWant } from './config.ts';
 import { onLambda } from './browser.ts';
@@ -32,7 +32,7 @@ export async function findVacant(browser: Browser): Promise<Slot[]> {
       for (let i = 0; i < open.length; i += 10) {
         await openTimes(page, open.slice(i, i + 10));
         for (const t of await readTimes(page)) {
-          if (t.status === 'vacant' && t.room.includes(config.roomKeyword)) {
+          if (t.status === 'vacant' && t.room.includes(config.sport)) {
             found.push({ facility: t.facility, room: t.room, date: t.date, from: t.from, to: t.to });
           }
         }

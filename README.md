@@ -1,76 +1,122 @@
-# badminton-yoyaku
+# fukuoka-gym-reservation
 
-福岡市公共施設案内・予約システム（https://www3.11489.jp/fukuoka/）で、体育館の**個人利用**のバドミントン枠の空きを定期的に確認し、希望に合う空きが出たら LINE に通知します。
+[福岡市公共施設案内・予約システム](https://www3.11489.jp/fukuoka/user/Home)で、体育館の**個人利用**の枠（バドミントン・卓球など）を定期的に見張り、空きが出たら LINE に通知します。通知の「予約する」ボタンや自動予約で、そのまま予約もできます。
 
-- 空きの確認はログインなしで行います（ログイン不要の「空き照会」画面を読むだけ）
-- 確認は既定で10分ごと（毎回 ±20% ずらす）、深夜1〜7時は止めます
-- 一度通知した枠は、埋まってまた空くまで再通知しません
+- 空き確認はログイン不要の「空き照会」画面を読むだけです
+- 予約にはログインが必要です。ログインは自分でブラウザで行い、そのクッキーだけを保存します（パスワードは保存しません。reCAPTCHA も突破しません）
+- AWS Lambda で動かすので PC を起動しておく必要はなく、費用はほぼ無料枠に収まります
+
+## 構成
+
+```mermaid
+flowchart LR
+  EB[EventBridge<br/>10分ごと] --> W[Lambda worker<br/>ヘッドレス Chromium]
+  W -- 空き照会・予約 --> Site[予約システム]
+  W -- 通知 --> LINE[LINE]
+  LINE -- ボタン・コマンド --> H[Lambda webhook<br/>関数URL]
+  H -- 予約を依頼 --> W
+  W & H <--> S3[(S3<br/>状態・クッキー)]
+  PC[PC: npm run login] -- クッキー --> S3
+```
+
+| ファイル | 役割 |
+| --- | --- |
+| `src/site.ts` | 予約システムの画面操作（施設選択 → 施設別空き状況 → 時間帯別空き状況） |
+| `src/check.ts` | 指定した施設・期間の空き枠を集める |
+| `src/book.ts` | 1枠を予約する（申込内容入力 → 申込） |
+| `src/app.ts` | 空き確認・通知・自動予約・LINE コマンドの本体 |
+| `src/line.ts` | LINE Messaging API（通知、返信、「予約する」ボタン、署名検証） |
+| `src/store.ts` | 状態とクッキーの保存（S3、PC では `.data/`） |
+| `src/lambda.ts` | Lambda の入口（`worker` / `webhook`） |
+| `src/watch.ts` | PC で動かす場合の定期実行 |
+| `infra/app.ts` | AWS の構成（CDK） |
+
+## LINE でできること
+
+- 空き通知の **「予約する」** ボタン → その枠を予約して結果を返す
+- `状況` … 今の空き・設定・今月の予約数
+- `止めて` / `再開` … 空き確認の停止・再開
+- `自動予約オン` / `自動予約オフ`
+- `お試しモード` / `本番モード` … 最後の「申込」ボタンを押すかどうか（初期値はお試し）
 
 ## セットアップ
 
+Node.js 24 以上、AWS CLI v2、LINE 公式アカウントが必要です。
+
 ```bash
 npm install
-npx playwright install chromium
-cp .env.example .env   # LINE の値を書く
+npx playwright install chromium   # PC で動かす・ログインするときに使う
+cp .env.example .env
 ```
 
-## 使い方
+### LINE の準備（Messaging API）
+
+LINE Notify は 2025年3月に終了したため、自分専用の LINE 公式アカウントから送ります（無料プランで月200通まで。返信は数えません）。
+
+1. [LINE公式アカウント](https://entry.line.biz/form/entry/unverified)を作り、Official Account Manager の「設定 → Messaging API」で利用を開始する
+2. [LINE Developers](https://developers.line.biz/console/) のチャネルで
+   - 「チャネル基本設定」の**チャネルシークレット** → `.env` の `LINE_CHANNEL_SECRET`
+   - 「Messaging API設定」の**チャネルアクセストークン（長期）** → `.env` の `LINE_CHANNEL_ACCESS_TOKEN`
+3. 「Messaging API設定」の QR コードから、その公式アカウントを友だち追加する
+4. `npm run notify:test` でテスト通知が届くか確かめる
+
+### AWS にデプロイ
 
 ```bash
-npm run check   # 1回だけ確認
-npm run watch   # ずっと動かす（PC を起動している間）
+aws login
+npm run bootstrap   # 初回だけ
+npm run deploy
 ```
+
+出力された値を設定します。
+
+- `FukuokaGymReservation.StateBucket` → `.env` の `STATE_BUCKET`
+- `FukuokaGymReservation.WebhookUrl` → LINE Developers の「Messaging API設定 → Webhook URL」に入れて「Webhookの利用」をオン。Official Account Manager の「応答設定」で応答メッセージはオフ
+
+`.env` の LINE の値は Lambda の環境変数として渡されるので、変えたら `npm run deploy` し直してください。
+
+### 予約システムへのログイン
+
+予約するには、予約システムの[利用者登録](https://www.city.fukuoka.lg.jp/soki/system/shisei/koukyousisetsu-yoyaku_riyoutouroku_3.html)が必要です（オンライン申請で本人確認後、施設の承認まで2〜4週間）。
+
+```bash
+npm run login
+```
+
+ブラウザが開くので自分でログインすると、クッキーが保存されます（`STATE_BUCKET` があれば S3、なければ `.data/`）。ログインが切れると LINE で知らせて自動予約だけ止まるので、そのときもう一度実行します。
 
 ## 設定（config.json）
 
 | 項目 | 意味 |
 | --- | --- |
-| `facilities` | 確認する施設。予約システムの施設選択画面の名前そのまま |
-| `dayRow` / `roomKeyword` | 施設別空き状況の「競技場」行 → 時間帯別空き状況の「バドミントン」行を見る |
+| `sport` | 種目。時間帯別空き状況でこの文字列を含む行を探す（例: `バドミントン`、`卓球`） |
+| `facilities` | 見る施設。予約システムの施設選択画面の名前そのまま（例: `市民体育館（個人利用）`） |
+| `dayRow` | 施設別空き状況で見る行。バドミントンは `競技場` |
 | `weeksAhead` | 今日から何週間先まで見るか |
-| `wants` | 希望条件。`weekdays`（日〜土）、`from`（開始がこの時刻以降）、`to`（終了がこの時刻まで）。どれか1つに合えば通知 |
+| `wants` | 希望条件。`weekdays`（日〜土）、`from`（開始がこの時刻以降）、`to`（終了がこの時刻まで）。どれか1つに合えば対象 |
 | `intervalMinutes` | 確認の間隔（分） |
-| `quietHours` | 確認しない時間帯 `[開始時, 終了時)` |
+| `quietHours` | 確認しない時間帯 `[開始時, 終了時)`（日本時間） |
+| `autoBook.enabled` | 空きが出たら自動で予約するか（LINE の `自動予約オン/オフ` で上書き） |
+| `autoBook.dryRun` | `true` の間は最後の「申込」を押さない（LINE の `お試しモード/本番モード` で上書き） |
+| `autoBook.maxPerMonth` | 利用月ごとの自動予約の上限 |
+| `autoBook.minDaysAhead` | 何日先以降の枠だけ自動予約するか（1 = 明日以降） |
+| `autoBook.people` | 利用人数 |
+| `autoBook.purpose` | 申込内容入力の利用目的。省略すると `sport` と同じ |
 
-## LINE の準備（Messaging API）
+`config.json` を変えたら `npm run deploy` で反映します。
 
-LINE Notify は 2025年3月に終了したため、自分専用の LINE 公式アカウントからプッシュ通知を送ります（無料プランで月200通まで）。
+## PC だけで動かす
 
-1. [LINE Developers](https://developers.line.biz/console/) にログインし、プロバイダーと **Messaging API チャネル**を作る
-2. チャネルの「Messaging API設定」で**チャネルアクセストークン（長期）**を発行 → `.env` の `LINE_CHANNEL_ACCESS_TOKEN`
-3. 「Messaging API設定」の QR コードから、その公式アカウントを友だち追加する
-4. `npm run test-notify` でテスト通知が届くか確かめる
-
-`LINE_USER_ID` を省略すると友だち全員へのブロードキャストになります。自分専用のアカウントなら届くのは自分だけです。
-
-## 自動予約
-
-予約システムの利用者登録（承認まで2〜4週間）が済んでから使います。
-
-1. `npm run login` … ブラウザが開くので**自分で**ログインして、ブラウザを閉じる。ログイン状態が `.auth/` に保存されます（パスワードはどこにも保存しません）
-2. `config.json` の `autoBook.enabled` を `true` にする。`dryRun: true` の間は、申込内容入力（利用目的・人数）まで進めて**最後の「申込」は押さず**、その画面のスクリーンショットを `screenshots/` に残して LINE で知らせます
-3. お試しの結果が正しければ `dryRun` を `false` にする
-
-| 項目 | 意味 |
-| --- | --- |
-| `autoBook.maxPerMonth` | 利用月ごとの上限（既定 4件） |
-| `autoBook.minDaysAhead` | 何日先以降の枠だけ予約するか（既定 1 = 明日以降） |
-| `autoBook.purpose` / `people` | 申込内容入力の利用目的と人数（個人利用バドミントンは2〜6名） |
-
-- 1回の確認で予約するのは1件だけ、同じ日に2枠は取りません
-- ログインが切れていたら（reCAPTCHA が出た場合も含む）LINE で知らせて、自動予約だけ止めます。`npm run login` で再開します
-- 申込内容入力の画面はログインしないと見られないため、操作マニュアルをもとに作っています。最初は必ずお試しモードで確認してください
-
-### 予約の流れの記録（うまく動かないとき）
+AWS を使わずに PC で動かすこともできます（PC を起動している間だけ確認します。LINE のボタンやコマンドは使えません）。
 
 ```bash
-npm run record
+npm run check   # 1回だけ確認
+npm run watch   # ずっと動かす
 ```
-
-ブラウザで自分でログインし、空き枠を選んで申込内容入力まで進め、**最後の申込ボタンは押さずに**ブラウザを閉じます。画面ごとの HTML とスクリーンショットが `record/` に保存されます（パスワードは保存しません）。
 
 ## 注意
 
+- 自動予約は、1回の確認で1件まで、同じ日に2枠は取らない、月の上限つきです
 - 当日キャンセルは翌月1か月間の新規予約停止のペナルティがあります（利用日前日19時まではシステムから取消可）
-- キャンセル前提の予約や、複数アカウントでの予約は「不適切な利用」として利用停止の対象です
-- ログイン時に reCAPTCHA が出ることがあります。このツールは CAPTCHA を自動で突破しません
+- キャンセル前提の予約や複数アカウントでの予約は、予約システムの「[不適切な利用](https://www.city.fukuoka.lg.jp/soki/system/shisei/documents/futekiseturiyoiu.pdf)」として利用停止の対象です
+- 申込内容入力の画面操作は、市の操作マニュアルをもとに作っています。最初はお試しモードで、スクリーンショット（`screenshots/`）を確認してください

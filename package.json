@@ -1,22 +1,22 @@
 {
-  "name": "badminton-yoyaku",
-  "version": "1.0.0",
-  "description": "",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "watch": "node src/watch.ts",
-    "check": "node src/watch.ts --once",
-    "record": "node scripts/record.ts",
-    "typecheck": "tsc",
-    "test-notify": "node scripts/test-notify.ts",
-    "login": "node scripts/login.ts",
-    "deploy": "cdk deploy --require-approval never",
-    "synth": "cdk synth --quiet"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "name": "fukuoka-gym-reservation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "福岡市公共施設案内・予約システムで体育館の個人利用枠を見張り、LINE で通知・予約する",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "check": "node src/watch.ts --once",
+    "watch": "node src/watch.ts",
+    "login": "node scripts/login.ts",
+    "notify:test": "node scripts/test-notify.ts",
+    "typecheck": "tsc",
+    "synth": "cdk synth --quiet",
+    "bootstrap": "node scripts/aws.ts bootstrap",
+    "deploy": "node scripts/aws.ts deploy --require-approval never"
+  },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1147.0",
     "@aws-sdk/client-s3": "^3.1147.0",

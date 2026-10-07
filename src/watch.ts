@@ -3,7 +3,7 @@
 //   node src/watch.ts --once  … 1回だけ確認して終わる
 import { config } from './config.ts';
 import { runCheck } from './app.ts';
-import { notify } from './notify.ts';
+import { notify } from './line.ts';
 
 function jstHour() {
   return new Date(Date.now() + 9 * 3600e3).getUTCHours();

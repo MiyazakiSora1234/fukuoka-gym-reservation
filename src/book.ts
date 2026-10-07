@@ -41,7 +41,7 @@ export async function bookSlot(slot: Slot, dryRun: boolean): Promise<BookResult>
     await openTimes(page, [day]);
 
     const cell = (await readTimes(page)).find(
-      (t) => t.date === slot.date && t.room.includes(config.roomKeyword) && t.from === slot.from && t.to === slot.to,
+      (t) => t.date === slot.date && t.room.includes(config.sport) && t.from === slot.from && t.to === slot.to,
     );
     if (!cell || cell.status !== 'vacant') throw new Error('もう空いていません（時間帯別）');
     await page.locator('li.selection-item div.btn-group-toggle').nth(cell.index).locator('label').click();
@@ -56,7 +56,7 @@ export async function bookSlot(slot: Slot, dryRun: boolean): Promise<BookResult>
     if (!body.includes(slot.from.replace(/^0/, '')) && !body.includes(slot.from)) {
       throw new Error('申込内容入力の時間帯が選んだ枠と違います');
     }
-    await page.locator('label', { hasText: config.autoBook.purpose }).first().click();
+    await page.locator('label', { hasText: config.autoBook.purpose ?? config.sport }).first().click();
     const people = page.locator('input[type="number"], input[name*="Number" i], input[name*="Count" i]').first();
     await people.fill(String(config.autoBook.people));
     // 画面に出ている申込内容（利用日・時間帯・施設・使用料）を結果として返す

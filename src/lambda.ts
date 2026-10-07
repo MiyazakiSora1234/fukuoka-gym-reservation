@@ -4,9 +4,10 @@
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { runCheck, runBook, handleCommand } from './app.ts';
-import { notify, reply, textMessage, verifySignature, dataToSlot, formatSlot } from './notify.ts';
+import { notify, reply, textMessage, verifySignature, dataToSlot, formatSlot } from './line.ts';
 import { loadJSON, saveJSON } from './store.ts';
 import type { Slot } from './site.ts';
+import { config } from './config.ts';
 
 type WorkerEvent = { action?: 'check' } | { action: 'book'; slot: Slot };
 
@@ -46,7 +47,7 @@ export async function webhook(event: LambdaFunctionURLEvent): Promise<LambdaFunc
         }),
       );
     } else if (e.type === 'follow') {
-      await reply(e.replyToken, [textMessage('🏸 バドミントン通知です。空きが出たらお知らせします。「ヘルプ」で使い方を表示します')]);
+      await reply(e.replyToken, [textMessage(`🏟️ 体育館予約システムです。${config.sport}の空きが出たらお知らせします。「ヘルプ」で使い方を表示します`)]);
     }
   }
   return { statusCode: 200, body: 'ok' };

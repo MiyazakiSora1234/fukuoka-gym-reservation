@@ -1,10 +1,8 @@
 node_modules/
-.env
-.auth/
-state.json
-tmp/
-record/
-last-error.png
-screenshots/
 cdk.out/
+
+# 秘密情報・実行時の状態
+.env
 .data/
+screenshots/
+last-error.png

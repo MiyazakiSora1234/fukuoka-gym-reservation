@@ -1,11 +1,11 @@
 {
+  "sport": "バドミントン",
   "facilities": [
     "市民体育館（個人利用）",
     "東体育館（個人利用）",
     "博多体育館（個人利用）"
   ],
   "dayRow": "競技場",
-  "roomKeyword": "バドミントン",
   "weeksAhead": 5,
   "wants": [
     {
@@ -38,7 +38,6 @@
     "dryRun": true,
     "maxPerMonth": 4,
     "minDaysAhead": 1,
-    "purpose": "バドミントン",
     "people": 4
   }
 }

@@ -1,4 +1,4 @@
 // LINE に届くか確かめる: npm run test-notify
-import { notify } from '../src/notify.ts';
+import { notify } from '../src/line.ts';
 
-await notify('🏸 テスト通知です。これが届いていれば設定は完了です。');
+await notify('🏟️ テスト通知です。これが届いていれば設定は完了です。');

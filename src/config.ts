@@ -12,10 +12,10 @@ export interface Want {
 
 export interface Config {
   facilities: string[];
-  /** 施設別空き状況で見る行（バドミントンは競技場の中にある） */
+  /** 種目。時間帯別空き状況で、行の名前にこの文字列を含む枠を探す（例: バドミントン、卓球） */
+  sport: string;
+  /** 施設別空き状況で見る行（バドミントンは「競技場」、卓球は「小体育室」など） */
   dayRow: string;
-  /** 時間帯別空き状況で、行の名前にこの文字列を含む枠を探す */
-  roomKeyword: string;
   weeksAhead: number;
   wants: Want[];
   intervalMinutes: number;
@@ -29,9 +29,9 @@ export interface Config {
     maxPerMonth: number;
     /** 今日から何日以上先の枠だけ予約するか（1 = 明日以降） */
     minDaysAhead: number;
-    /** 申込内容入力の「利用目的」で選ぶ項目 */
-    purpose: string;
-    /** 利用人数（バドミントン個人利用は2〜6名） */
+    /** 申込内容入力の「利用目的」で選ぶ項目。省略すると sport と同じ */
+    purpose?: string;
+    /** 利用人数（例: バドミントン個人利用は2〜6名） */
     people: number;
   };
 }

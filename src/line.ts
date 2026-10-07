@@ -59,7 +59,7 @@ export function dataToSlot(data: string): Slot | undefined {
   const [kind, idx, date, from, to] = data.split('|');
   const facility = config.facilities[Number(idx)];
   if (kind !== 'book' || !facility) return undefined;
-  return { facility, room: config.roomKeyword, date, from, to };
+  return { facility, room: config.sport, date, from, to };
 }
 
 /** 空き枠の一覧。1枠ごとに「予約する」ボタンを付ける */

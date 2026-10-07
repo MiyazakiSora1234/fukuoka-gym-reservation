@@ -4,7 +4,7 @@ import { findVacant } from './check.ts';
 import { launchBrowser } from './browser.ts';
 import { bookSlot, LoginRequired } from './book.ts';
 import { loadState, saveState, type State } from './store.ts';
-import { notify, send, textMessage, vacancyMessage, formatSlot, type Message } from './notify.ts';
+import { notify, send, textMessage, vacancyMessage, formatSlot, type Message } from './line.ts';
 import { BASE, slotKey, type Slot } from './site.ts';
 
 function jstDate(offsetDays = 0) {
@@ -44,7 +44,7 @@ export async function runCheck() {
   }
   const fresh = vacant.filter((s) => !state.notified.includes(slotKey(s)));
   console.log(`${new Date().toLocaleString('ja-JP')} 希望に合う空き ${vacant.length} 件（新規 ${fresh.length} 件）`);
-  if (fresh.length) await send([vacancyMessage('🏸 バドミントンの空きが出ました', fresh)]);
+  if (fresh.length) await send([vacancyMessage(`🏟️ ${config.sport}の空きが出ました`, fresh)]);
   // いま空いている枠だけを覚えておく
   state.notified = vacant.map(slotKey);
   state.vacant = vacant;
