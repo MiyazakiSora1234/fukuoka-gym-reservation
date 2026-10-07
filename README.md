@@ -38,8 +38,10 @@ LINE Notify は 2025年3月に終了したため、自分専用の LINE 公式�
 
 1. [LINE Developers](https://developers.line.biz/console/) にログインし、プロバイダーと **Messaging API チャネル**を作る
 2. チャネルの「Messaging API設定」で**チャネルアクセストークン（長期）**を発行 → `.env` の `LINE_CHANNEL_ACCESS_TOKEN`
-3. 「チャネル基本設定」の一番下にある**あなたのユーザーID**（`U` から始まる）→ `.env` の `LINE_USER_ID`
-4. 「Messaging API設定」の QR コードから、その公式アカウントを友だち追加する
+3. 「Messaging API設定」の QR コードから、その公式アカウントを友だち追加する
+4. `npm run test-notify` でテスト通知が届くか確かめる
+
+`LINE_USER_ID` を省略すると友だち全員へのブロードキャストになります。自分専用のアカウントなら届くのは自分だけです。
 
 ## 予約の流れの記録（自動予約の準備）
 
