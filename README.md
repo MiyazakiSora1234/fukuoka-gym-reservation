@@ -3,7 +3,7 @@
 [福岡市公共施設案内・予約システム](https://www3.11489.jp/fukuoka/user/Home)で、体育館の**個人利用**の枠（バドミントン・卓球など）を定期的に見張り、空きが出たら LINE に通知します。通知の「予約する」ボタンや自動予約で、そのまま予約もできます。
 
 - 空き確認はログイン不要の「空き照会」画面を読むだけです
-- 予約にはログインが必要です。ログインは自分でブラウザで行い、そのクッキーだけを保存します（パスワードは保存しません。reCAPTCHA も突破しません）
+- 予約にはログインが必要です。利用者ID・パスワードは自分の AWS アカウントの SSM パラメータストア（SecureString）に暗号化して置き、ログインが切れたときだけ Lambda が使います（reCAPTCHA は突破しません）
 - AWS Lambda で動かすので PC を起動しておく必要はなく、費用はほぼ無料枠に収まります
 
 ## 構成
@@ -16,7 +16,7 @@ flowchart LR
   LINE -- ボタン・コマンド --> H[Lambda webhook<br/>関数URL]
   H -- 予約を依頼 --> W
   W & H <--> S3[(S3<br/>状態・クッキー)]
-  PC[PC: npm run login] -- クッキー --> S3
+  SSM[(SSM<br/>利用者ID・パスワード)] --> W
 ```
 
 | ファイル | 役割 |
@@ -27,6 +27,7 @@ flowchart LR
 | `src/app.ts` | 空き確認・通知・自動予約・LINE コマンドの本体 |
 | `src/line.ts` | LINE Messaging API（通知、返信、「予約する」ボタン、署名検証） |
 | `src/store.ts` | 状態とクッキーの保存（S3、PC では `.data/`） |
+| `src/credentials.ts` | 利用者ID・パスワードの読み込み（SSM パラメータストア） |
 | `src/lambda.ts` | Lambda の入口（`worker` / `webhook`） |
 | `src/watch.ts` | PC で動かす場合の定期実行 |
 | `infra/app.ts` | AWS の構成（CDK） |
@@ -77,13 +78,15 @@ npm run deploy
 
 ### 予約システムへのログイン
 
-予約するには、予約システムの[利用者登録](https://www.city.fukuoka.lg.jp/soki/system/shisei/koukyousisetsu-yoyaku_riyoutouroku_3.html)が必要です（オンライン申請で本人確認後、施設の承認まで2〜4週間）。
+予約するには、予約システムの[利用者登録](https://www.city.fukuoka.lg.jp/soki/system/shisei/koukyousisetsu-yoyaku_riyoutouroku_3.html)が必要です（オンライン申請で本人確認後、施設の承認まで2〜4週間）。登録が済んだら、発行された利用者ID（メールアドレスではなく英数字の ID）とパスワードを登録します。
 
 ```bash
-npm run login
+npm run set-credentials
 ```
 
-ブラウザが開くので自分でログインすると、クッキーが保存されます（`STATE_BUCKET` があれば S3、なければ `.data/`）。ログインが切れると LINE で知らせて自動予約だけ止まるので、そのときもう一度実行します。
+SSM パラメータストアの `/fukuoka-gym-reservation/user-id` と `/fukuoka-gym-reservation/password` に SecureString で保存され、読めるのは worker Lambda だけです。予約のときにログインが切れていれば、これで自動的にログインし直します。パスワードを変えたらもう一度実行してください。
+
+自動ログインで reCAPTCHA が出た場合などは LINE で知らせて自動予約だけ止まります。そのときは PC で `npm run login` を実行し、開いたブラウザで自分でログインすると、クッキーが S3 に保存されて再開します。
 
 ## 設定（config.json）
 

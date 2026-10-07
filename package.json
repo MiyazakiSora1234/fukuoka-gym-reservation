@@ -15,11 +15,13 @@
     "typecheck": "tsc",
     "synth": "cdk synth --quiet",
     "bootstrap": "node scripts/aws.ts bootstrap",
-    "deploy": "node scripts/aws.ts deploy --require-approval never"
+    "deploy": "node scripts/aws.ts deploy --require-approval never",
+    "set-credentials": "node scripts/set-credentials.ts"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1147.0",
     "@aws-sdk/client-s3": "^3.1147.0",
+    "@aws-sdk/client-ssm": "^3.1147.0",
     "@sparticuz/chromium": "^153.0.0",
     "dotenv": "^18.0.6",
     "playwright": "^1.63.0",

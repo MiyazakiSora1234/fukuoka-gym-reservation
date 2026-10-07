@@ -5,6 +5,7 @@
 // 常時起動のサーバーを置かず、Lambda の無料枠に収まる構成にしている
 import 'dotenv/config';
 import { App, Stack, Duration, RemovalPolicy, CfnOutput } from 'aws-cdk-lib';
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 import { Bucket, BlockPublicAccess, BucketEncryption } from 'aws-cdk-lib/aws-s3';
 import { Runtime, Architecture, FunctionUrlAuthType } from 'aws-cdk-lib/aws-lambda';
 import { NodejsFunction, OutputFormat } from 'aws-cdk-lib/aws-lambda-nodejs';
@@ -57,6 +58,20 @@ const worker = new NodejsFunction(stack, 'Worker', {
   retryAttempts: 0,
 });
 bucket.grantReadWrite(worker);
+// 予約システムの利用者ID・パスワード（npm run set-credentials で登録する SecureString）を読む
+worker.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['ssm:GetParameters'],
+    resources: [stack.formatArn({ service: 'ssm', resource: 'parameter', resourceName: 'fukuoka-gym-reservation/*' })],
+  }),
+);
+worker.addToRolePolicy(
+  new PolicyStatement({
+    actions: ['kms:Decrypt'],
+    resources: ['*'],
+    conditions: { StringEquals: { 'kms:ViaService': `ssm.${stack.region}.amazonaws.com` } },
+  }),
+);
 
 const webhook = new NodejsFunction(stack, 'Webhook', {
   ...common,
