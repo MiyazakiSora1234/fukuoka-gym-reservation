@@ -69,7 +69,7 @@ async function login(page: Page) {
   }
 }
 
-export async function bookSlot(slot: Slot, dryRun: boolean): Promise<BookResult> {
+export async function bookSlot(slot: Slot, dryRun: boolean, people: number): Promise<BookResult> {
   const auth = await loadJSON<{ cookies: any[]; origins: any[] }>(AUTH_KEY, { cookies: [], origins: [] });
   const browser = await launchBrowser();
   const context = await browser.newContext({ storageState: auth, viewport: { width: 1200, height: 900 } });
@@ -93,8 +93,8 @@ export async function bookSlot(slot: Slot, dryRun: boolean): Promise<BookResult>
       throw new Error('申込内容入力の時間帯が選んだ枠と違います');
     }
     await page.locator('label', { hasText: config.autoBook.purpose ?? config.sport }).first().click();
-    const people = page.locator('input[type="number"], input[name*="Number" i], input[name*="Count" i]').first();
-    await people.fill(String(config.autoBook.people));
+    const peopleInput = page.locator('input[type="number"], input[name*="Number" i], input[name*="Count" i]').first();
+    await peopleInput.fill(String(people));
     // 画面に出ている申込内容（利用日・時間帯・施設・使用料）を結果として返す
     const summary = (await page.locator('body').innerText())
       .split('\n')

@@ -1,6 +1,6 @@
 // 指定した施設・期間で、目的の種目の空き枠を集める
 import type { Browser } from 'playwright-core';
-import { config, matchesWant } from './config.ts';
+import { config, matchesWant, type Want } from './config.ts';
 import { onLambda } from './browser.ts';
 import { openDays, showWeek, readDays, openTimes, readTimes, backToDays, type Slot } from './site.ts';
 
@@ -14,7 +14,8 @@ function addDays(date: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export async function findVacant(browser: Browser): Promise<Slot[]> {
+/** wants に合う曜日の日だけ時間帯別空き状況を開く（時間帯の絞り込みは呼び出し側） */
+export async function findVacant(browser: Browser, wants: Want[]): Promise<Slot[]> {
   const page = await browser.newPage();
   const found: Slot[] = [];
   try {
@@ -26,7 +27,7 @@ export async function findVacant(browser: Browser): Promise<Slot[]> {
         (c) =>
           (c.status === 'some' || c.status === 'vacant') &&
           c.room === config.dayRow &&
-          matchesWant({ date: c.date, from: '00:00', to: '00:00' }, config.wants.map((w) => ({ weekdays: w.weekdays }))),
+          matchesWant({ date: c.date, from: '00:00', to: '00:00' }, wants.map((w) => ({ weekdays: w.weekdays }))),
       );
       // 一度に選べるのは最大10コマまで
       for (let i = 0; i < open.length; i += 10) {

@@ -16,7 +16,8 @@
     "synth": "cdk synth --quiet",
     "bootstrap": "node scripts/aws.ts bootstrap",
     "deploy": "node scripts/aws.ts deploy --require-approval never",
-    "set-credentials": "node scripts/set-credentials.ts"
+    "set-credentials": "node scripts/set-credentials.ts",
+    "richmenu": "node scripts/richmenu.ts"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.1147.0",

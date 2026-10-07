@@ -24,21 +24,29 @@ flowchart LR
 | `src/site.ts` | 予約システムの画面操作（施設選択 → 施設別空き状況 → 時間帯別空き状況） |
 | `src/check.ts` | 指定した施設・期間の空き枠を集める |
 | `src/book.ts` | 1枠を予約する（申込内容入力 → 申込） |
-| `src/app.ts` | 空き確認・通知・自動予約・LINE コマンドの本体 |
-| `src/line.ts` | LINE Messaging API（通知、返信、「予約する」ボタン、署名検証） |
+| `src/app.ts` | 空き確認・通知・自動予約・LINE の操作の本体 |
+| `src/line.ts` | LINE Messaging API とメッセージの見た目（空き一覧・予約の確認・設定・条件） |
 | `src/store.ts` | 状態とクッキーの保存（S3、PC では `.data/`） |
 | `src/credentials.ts` | 利用者ID・パスワードの読み込み（SSM パラメータストア） |
 | `src/lambda.ts` | Lambda の入口（`worker` / `webhook`） |
 | `src/watch.ts` | PC で動かす場合の定期実行 |
 | `infra/app.ts` | AWS の構成（CDK） |
+| `scripts/richmenu.ts` | LINE のリッチメニューを作る |
 
 ## LINE でできること
 
-- 空き通知の **「予約する」** ボタン → その枠を予約して結果を返す
-- `状況` … 今の空き・設定・今月の予約数
-- `止めて` / `再開` … 空き確認の停止・再開
-- `自動予約オン` / `自動予約オフ`
-- `お試しモード` / `本番モード` … 最後の「申込」ボタンを押すかどうか（初期値はお試し）
+トーク画面の下のメニュー（リッチメニュー）から操作します。
+
+| メニュー | できること |
+| --- | --- |
+| 空き状況 | いま条件に合う空き枠と、確認・自動予約の状態 |
+| 今すぐ確認 | 10分を待たずにその場で空きを調べ直す |
+| 予約一覧 | このシステムで取った、これからの予約 |
+| 条件 | 探す曜日・時間帯（土日＋平日夜／土日だけ／平日の夜／いつでも）と人数 |
+| 設定 | 空き確認の停止・再開、自動予約のオン・オフ、お試し・本番の切り替え |
+| ヘルプ | 使い方 |
+
+空き通知の **「予約する」** を押すと確認が出て、「予約する」でもう一度押すと予約します（初期値はお試しモードで、最後の「申込」は押しません）。
 
 ## セットアップ
 
@@ -69,7 +77,12 @@ npm run bootstrap   # 初回だけ
 npm run deploy
 ```
 
-出力された値を設定します。
+出力された値を設定します。最後にリッチメニューを作ります（メニューを変えたときも実行します）。
+
+```bash
+npm run richmenu
+```
+
 
 - `FukuokaGymReservation.StateBucket` → `.env` の `STATE_BUCKET`
 - `FukuokaGymReservation.WebhookUrl` → LINE Developers の「Messaging API設定 → Webhook URL」に入れて「Webhookの利用」をオン。Official Account Manager の「応答設定」で応答メッセージはオフ

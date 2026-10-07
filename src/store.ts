@@ -47,6 +47,10 @@ export interface State {
   paused: boolean;
   /** LINE から変えた自動予約の設定（config.json より優先） */
   autoBook?: { enabled?: boolean; dryRun?: boolean };
+  /** LINE の「条件」で選んだ探す条件（app.ts の PRESETS の id）。なければ config.json の wants */
+  preset?: string;
+  /** LINE の「条件」で選んだ人数。なければ config.json の autoBook.people */
+  people?: number;
 }
 
 export const emptyState: State = {
