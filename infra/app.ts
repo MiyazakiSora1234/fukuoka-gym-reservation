@@ -24,6 +24,12 @@ const bucket = new Bucket(stack, 'State', {
   removalPolicy: RemovalPolicy.RETAIN,
 });
 
+// .env の書き間違いで LINE の署名検証が全部失敗しないよう、形式を確かめてからデプロイする
+const secret = process.env.LINE_CHANNEL_SECRET ?? '';
+if (!/^[0-9a-f]{32}$/.test(secret)) {
+  throw new Error(`.env の LINE_CHANNEL_SECRET が32桁の16進数ではありません（${secret.length}文字）`);
+}
+
 const environment = {
   STATE_BUCKET: bucket.bucketName,
   LINE_CHANNEL_ACCESS_TOKEN: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
