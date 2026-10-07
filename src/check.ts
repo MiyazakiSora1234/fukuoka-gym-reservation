@@ -1,6 +1,7 @@
 // 指定した施設・期間の空き枠（バドミントン）を集める
-import type { Browser } from 'playwright';
+import type { Browser } from 'playwright-core';
 import { config, matchesWant } from './config.ts';
+import { onLambda } from './browser.ts';
 import { openDays, showWeek, readDays, openTimes, readTimes, backToDays, type Slot } from './site.ts';
 
 function jstToday() {
@@ -40,7 +41,7 @@ export async function findVacant(browser: Browser): Promise<Slot[]> {
     }
   } catch (e) {
     // 原因調査用に失敗時の画面を残す
-    await page.screenshot({ path: 'last-error.png', fullPage: true }).catch(() => {});
+    await page.screenshot({ path: onLambda ? '/tmp/last-error.png' : 'last-error.png', fullPage: true }).catch(() => {});
     throw e;
   } finally {
     await page.close();

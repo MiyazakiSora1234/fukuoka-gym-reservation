@@ -7,8 +7,19 @@
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true,
-    "types": ["node"],
-    "lib": ["es2023", "dom"]
+    "types": [
+      "node",
+      "aws-lambda"
+    ],
+    "lib": [
+      "es2023",
+      "dom"
+    ],
+    "resolveJsonModule": true
   },
-  "include": ["src", "scripts"]
+  "include": [
+    "src",
+    "scripts",
+    "infra"
+  ]
 }

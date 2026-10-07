@@ -1,5 +1,5 @@
-import { readFileSync } from 'node:fs';
 import 'dotenv/config';
+import json from '../config.json' with { type: 'json' };
 
 export interface Want {
   /** 曜日（日月火水木金土）。省略するとすべての曜日 */
@@ -36,10 +36,12 @@ export interface Config {
   };
 }
 
-export const config: Config = JSON.parse(readFileSync('config.json', 'utf8'));
+// Lambda にも同梱されるよう import で読む
+export const config: Config = json as Config;
 
 export const env = {
   lineToken: process.env.LINE_CHANNEL_ACCESS_TOKEN ?? '',
+  lineSecret: process.env.LINE_CHANNEL_SECRET ?? '',
   lineUserId: process.env.LINE_USER_ID ?? '',
 };
 

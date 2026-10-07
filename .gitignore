@@ -6,3 +6,5 @@ tmp/
 record/
 last-error.png
 screenshots/
+cdk.out/
+.data/

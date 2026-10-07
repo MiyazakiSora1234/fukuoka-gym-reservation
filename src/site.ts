@@ -1,6 +1,6 @@
 // 福岡市公共施設案内・予約システム（www3.11489.jp/fukuoka）の画面操作
 // 画面遷移はサーバー側のセッションで管理されているので、ブラウザの戻る機能は使わず画面上のボタンで進む
-import type { Page } from 'playwright';
+import type { Page } from 'playwright-core';
 
 export const BASE = 'https://www3.11489.jp/fukuoka/user';
 
