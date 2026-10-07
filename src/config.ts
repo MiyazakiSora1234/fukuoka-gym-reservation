@@ -21,6 +21,19 @@ export interface Config {
   intervalMinutes: number;
   /** この時間帯（時）は確認しない。[開始, 終了) */
   quietHours: [number, number];
+  autoBook: {
+    enabled: boolean;
+    /** true の間は申込内容入力まで進んで、最後の「申込」は押さずに止まる */
+    dryRun: boolean;
+    /** 利用月ごとの自動予約の上限 */
+    maxPerMonth: number;
+    /** 今日から何日以上先の枠だけ予約するか（1 = 明日以降） */
+    minDaysAhead: number;
+    /** 申込内容入力の「利用目的」で選ぶ項目 */
+    purpose: string;
+    /** 利用人数（バドミントン個人利用は2〜6名） */
+    people: number;
+  };
 }
 
 export const config: Config = JSON.parse(readFileSync('config.json', 'utf8'));

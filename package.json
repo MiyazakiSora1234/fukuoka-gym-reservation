@@ -8,7 +8,8 @@
     "check": "node src/watch.ts --once",
     "record": "node scripts/record.ts",
     "typecheck": "tsc",
-    "test-notify": "node scripts/test-notify.ts"
+    "test-notify": "node scripts/test-notify.ts",
+    "login": "node scripts/login.ts"
   },
   "keywords": [],
   "author": "",

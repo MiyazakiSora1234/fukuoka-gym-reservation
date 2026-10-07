@@ -23,11 +23,11 @@ function hhmm(v: string) {
   return `${n.slice(0, 2)}:${n.slice(2)}`;
 }
 
-async function next(page: Page) {
+export async function next(page: Page) {
   await page.locator('li.item.next button').click();
 }
 
-async function settle(page: Page) {
+export async function settle(page: Page) {
   await page.waitForLoadState('networkidle');
   // Vue の描画待ち。「Loading」表示が消えるまで
   await page.locator('text=Loading').first().waitFor({ state: 'hidden', timeout: 30_000 }).catch(() => {});

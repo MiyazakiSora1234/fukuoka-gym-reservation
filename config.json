@@ -32,5 +32,13 @@
   "quietHours": [
     1,
     7
-  ]
+  ],
+  "autoBook": {
+    "enabled": false,
+    "dryRun": true,
+    "maxPerMonth": 4,
+    "minDaysAhead": 1,
+    "purpose": "バドミントン",
+    "people": 4
+  }
 }
